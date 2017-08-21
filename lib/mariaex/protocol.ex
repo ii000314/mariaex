@@ -103,7 +103,7 @@ defmodule Mariaex.Protocol do
   end
 
   def reset_lru_cache(cache_size) do
-    lru_cache = LruCache.new(cache_size)
+    lru_cache = LruCache.new(normalize_cache_size(cache_size))
     case Process.put(:lru_cache, lru_cache) do
       nil -> nil
       {_size, tab} -> :ets.delete(tab)
@@ -119,7 +119,7 @@ defmodule Mariaex.Protocol do
     |> Keyword.put_new(:hostname, System.get_env("MDBHOST") || "localhost")
     |> Keyword.put_new(:port, System.get_env("MDBPORT") || 3306)
     |> Keyword.put_new(:timeout, @timeout)
-    |> Keyword.put_new(:cache_size, @cache_size)
+    |> Keyword.put_new(:cache_size, System.get_env("MDBCACHESIZE") || @cache_size)
     |> Keyword.put_new(:sock_type, :tcp)
     |> Keyword.put_new(:socket_options, [])
     |> Keyword.update!(:port, &normalize_port/1)
@@ -150,6 +150,9 @@ defmodule Mariaex.Protocol do
 
   defp normalize_port(port) when is_binary(port), do: String.to_integer(port)
   defp normalize_port(port) when is_integer(port), do: port
+
+  defp normalize_cache_size(cache_size) when is_binary(cache_size), do: String.to_integer(cache_size)
+  defp normalize_cache_size(cache_size) when is_integer(cache_size), do: cache_size
 
   defp handshake_recv(state, request) do
     case msg_recv(state) do
@@ -185,7 +188,7 @@ defmodule Mariaex.Protocol do
         {:error, error}
     end
   end
-  defp handle_handshake(packet(seqnum: seqnum, 
+  defp handle_handshake(packet(seqnum: seqnum,
                                msg: handshake(capability_flags_1: flag1,
                                               capability_flags_2: flag2,
                                               plugin: plugin) = handshake) = _packet,  %{opts: opts}, s) do
@@ -338,7 +341,7 @@ defmodule Mariaex.Protocol do
     {:error, error, s}
   end
 
-  defp prepare_lookup(%Query{name: "", statement: statement} = query, %{lru_cache: cache}) do
+  defp prepare_lookup(%Query{statement: statement} = query, %{lru_cache: cache}) do
     case LruCache.lookup(cache, statement) || LruCache.garbage_collect(cache) do
       {_id, ref, num_params} ->
         {:prepared, %{query | ref: ref, num_params: num_params}}
@@ -414,7 +417,7 @@ defmodule Mariaex.Protocol do
     end
   end
 
-  defp prepare_insert(id, num_params, %Query{name: "", statement: statement, ref: ref} = query, %{lru_cache: cache}) do
+  defp prepare_insert(id, num_params, %Query{statement: statement, ref: ref} = query, %{lru_cache: cache}) do
     ref = ref || make_ref()
     true = LruCache.insert_new(cache, statement, id, ref, num_params)
     %{query | ref: ref, num_params: num_params}
@@ -445,7 +448,7 @@ defmodule Mariaex.Protocol do
     end
   end
 
-  defp execute_lookup(%Query{name: ""} = query, %{lru_cache: cache}) do
+  defp execute_lookup(%Query{} = query, %{lru_cache: cache}) do
     %Query{statement: statement, ref: ref} = query
     case LruCache.lookup(cache, statement) || LruCache.garbage_collect(cache) do
       {id, ^ref, _} ->
@@ -486,7 +489,7 @@ defmodule Mariaex.Protocol do
     end
   end
 
-  defp prepare_execute_lookup(%Query{name: "", statement: statement}, %{lru_cache: cache}) do
+  defp prepare_execute_lookup(%Query{statement: statement}, %{lru_cache: cache}) do
     LruCache.id(cache, statement)
   end
   defp prepare_execute_lookup(%Query{name: name}, %{cache: cache}) do
@@ -680,7 +683,7 @@ defmodule Mariaex.Protocol do
     end
   end
 
-  defp close_lookup(%Query{name: "", statement: statement}, %{lru_cache: cache}) do
+  defp close_lookup(%Query{statement: statement}, %{lru_cache: cache}) do
     case LruCache.take(cache, statement) do
       id when is_integer(id) ->
         {:close, id}
@@ -712,7 +715,7 @@ defmodule Mariaex.Protocol do
   end
 
   defp declare_lookup(%Query{type: :text} = query, _), do: {:text, query}
-  defp declare_lookup(%Query{name: "", statement: statement} = query, %{lru_cache: cache}) do
+  defp declare_lookup(%Query{statement: statement} = query, %{lru_cache: cache}) do
     case LruCache.take(cache, statement) do
       id when is_integer(id) ->
         {:declare, id}
@@ -749,7 +752,7 @@ defmodule Mariaex.Protocol do
     end
   end
 
-  defp prepare_declare_lookup(%Query{name: "", statement: statement}, %{lru_cache: cache}) do
+  defp prepare_declare_lookup(%Query{statement: statement}, %{lru_cache: cache}) do
     LruCache.take(cache, statement)
   end
   defp prepare_declare_lookup(%Query{name: name}, %{cache: cache}) do
@@ -865,7 +868,7 @@ defmodule Mariaex.Protocol do
     end
   end
 
-  defp deallocate_insert(id, %Query{name: "", statement: statement, ref: ref, num_params: num_params} = query, %{lru_cache: cache}) do
+  defp deallocate_insert(id, %Query{statement: statement, ref: ref, num_params: num_params} = query, %{lru_cache: cache}) do
     case LruCache.insert_new(cache, statement, id, ref, num_params) do
       true ->
         case LruCache.garbage_collect(cache) do
