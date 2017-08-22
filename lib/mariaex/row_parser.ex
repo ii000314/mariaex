@@ -290,8 +290,8 @@ defmodule Mariaex.RowParser do
     decode_text_rows(string, rest, fields, acc)
   end
 
-  defp decode_text_part(<<251::8, len::8-little, string::size(len)-binary, rest::bits>>, fields, acc) do
-    decode_text_rows(string, rest, fields, acc)
+  defp decode_text_part(<<251::8, rest::bits>>, fields, acc) do # NULL
+    decode_text_rows(nil, rest, fields, acc)
   end
 
   defp decode_text_part(<<252::8, len::16-little, string::size(len)-binary, rest::bits>>, fields, acc) do
