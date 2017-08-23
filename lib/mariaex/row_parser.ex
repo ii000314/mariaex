@@ -310,6 +310,10 @@ defmodule Mariaex.RowParser do
     Enum.reverse(acc)
   end
 
+  defp decode_text_rows(nil, rest, [_type | fields], acc) do
+    decode_text_part(rest, fields, [nil | acc])
+  end
+
   defp decode_text_rows(string, rest, [:string | fields], acc) do
     decode_text_part(rest, fields, [string | acc])
   end
