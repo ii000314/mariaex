@@ -60,7 +60,7 @@ defimpl DBConnection.Query, for: Mariaex.Query do
   def encode(%Mariaex.Query{type: :binary, binary_as: binary_as}, params, _opts) do
     parameters_to_binary(params, binary_as)
   end
-  def encode(%Mariaex.Query{type: :text}, [], _opts) do
+  def encode(%Mariaex.Query{type: :text}, _params, _opts) do
     []
   end
 
