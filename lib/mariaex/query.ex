@@ -53,10 +53,10 @@ defimpl DBConnection.Query, for: Mariaex.Query do
   def encode(%Mariaex.Query{type: nil} = query, _params, _opts) do
     raise ArgumentError, "query #{inspect query} has not been prepared"
   end
-  def encode(%Mariaex.Query{num_params: num_params} = query, params, _opts)
-      when length(params) != num_params do
-    raise ArgumentError, "parameters must be of length #{num_params} for query #{inspect query}"
-  end
+  # def encode(%Mariaex.Query{num_params: num_params} = query, params, _opts)
+  #     when length(params) != num_params do
+  #   raise ArgumentError, "parameters must be of length #{num_params} for query #{inspect query}"
+  # end
   def encode(%Mariaex.Query{type: :binary, binary_as: binary_as}, params, _opts) do
     parameters_to_binary(params, binary_as)
   end
